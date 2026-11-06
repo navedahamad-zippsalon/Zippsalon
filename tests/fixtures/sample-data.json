@@ -1,0 +1,69 @@
+{
+  "users": {
+    "validRegister": {
+      "firstName": "Test",
+      "lastName": "User",
+      "email": "test.suite@example.com",
+      "password": "Password@12345",
+      "phone": "+919876500001",
+      "countryCode": "+91",
+      "role": "USER"
+    },
+    "invalidRegister": {
+      "firstName": "",
+      "email": "invalid-email-format",
+      "password": "123"
+    },
+    "validLogin": {
+      "email": "admin@zippsalon.com",
+      "password": "Admin@123"
+    },
+    "invalidLogin": {
+      "email": "admin@zippsalon.com",
+      "password": "WrongPassword@999"
+    }
+  },
+  "salons": {
+    "validCreate": {
+      "name": "Test Glamour Salon",
+      "description": "Automated testing salon",
+      "avgPrice": 450,
+      "avgWaitTime": 15
+    },
+    "invalidCreate": {
+      "avgPrice": -50
+    }
+  },
+  "bookings": {
+    "validCreate": {
+      "bookingDate": "2026-10-15T10:00:00.000Z",
+      "items": [
+        {
+          "name": "Classic Haircut",
+          "price": 500
+        }
+      ],
+      "discount": 10
+    },
+    "invalidCreate": {
+      "bookingDate": "invalid-date",
+      "items": [],
+      "discount": 150
+    }
+  },
+  "leads": {
+    "validCreate": {
+      "name": "Lead Test",
+      "email": "lead.test@example.com",
+      "phone": "9876543210",
+      "countryCode": "+91",
+      "message": "Interested in franchise"
+    },
+    "invalidCreate": {
+      "name": "",
+      "email": "not-an-email",
+      "phone": ""
+    }
+  }
+}
+
