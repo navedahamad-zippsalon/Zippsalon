@@ -1,0 +1,2 @@
+ALTER TABLE "WhatsAppCampaign"
+  ADD COLUMN "estimatedAdminMargin" DOUBLE PRECISION NOT NULL DEFAULT 0;

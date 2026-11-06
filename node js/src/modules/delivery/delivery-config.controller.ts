@@ -1,0 +1,17 @@
+import { NextFunction, Request, Response } from "express";
+import { normalizePhone } from "../whatsapp/utils/phone";
+import * as smtp from "./smtp.service";
+import * as whatsapp from "./whatsapp-config.service";
+import { smtpCreateSchema, smtpUpdateSchema, smtpTestEmailSchema, whatsappConfigSchema, whatsappTestMessageSchema } from "./delivery-config.validation";
+
+const actor = (req: Request) => (req as any).user.userId as string;
+export async function getSmtp(_req: Request, res: Response, next: NextFunction) { try { res.json({ success: true, data: await smtp.getPublicConfiguration() }); } catch (error) { next(error); } }
+export async function saveSmtp(req: Request, res: Response, next: NextFunction) { try { const current = await smtp.getPublicConfiguration(); const value = (req.method === "POST" && !current.id ? smtpCreateSchema : smtpUpdateSchema).parse(req.body); await smtp.saveConfiguration(actor(req), value); res.json({ success: true, message: req.method === "POST" ? "SMTP configuration created successfully" : "SMTP configuration updated successfully", data: await smtp.getPublicConfiguration() }); } catch (error) { next(error); } }
+export async function testSmtp(_req: Request, res: Response, next: NextFunction) { try { const result = await smtp.verifyConnection(); res.status(result.success ? 200 : 503).json({ success: result.success, data: result, ...(result.success ? {} : { code: result.code, message: result.message }) }); } catch (error) { next(error); } }
+export async function testSmtpEmail(req: Request, res: Response, next: NextFunction) { try { const { email } = smtpTestEmailSchema.parse(req.body); await smtp.sendMail({ to: email, subject: "Zippsalon SMTP test", text: "Your Zippsalon SMTP configuration is working." }); res.json({ success: true, message: "Test email sent successfully" }); } catch (error) { next(error); } }
+export async function deleteSmtp(_req: Request, res: Response, next: NextFunction) { try { await smtp.deleteConfiguration(); res.json({ success: true, message: "SMTP configuration deleted" }); } catch (error) { next(error); } }
+export async function getWhatsapp(_req: Request, res: Response, next: NextFunction) { try { res.json({ success: true, data: await whatsapp.getPublicConfiguration() }); } catch (error) { next(error); } }
+export async function saveWhatsapp(req: Request, res: Response, next: NextFunction) { try { await whatsapp.saveConfiguration(actor(req), whatsappConfigSchema.parse(req.body)); res.json({ success: true, data: await whatsapp.getPublicConfiguration() }); } catch (error) { next(error); } }
+export async function testWhatsapp(_req: Request, res: Response, next: NextFunction) { try { const result = await whatsapp.verifyConnection(); res.status(result.success ? 200 : 503).json({ success: result.success, data: result, ...(result.success ? {} : { code: result.code, message: result.message }) }); } catch (error) { next(error); } }
+export async function testWhatsappMessage(req: Request, res: Response, next: NextFunction) { try { const body = whatsappTestMessageSchema.parse(req.body); await whatsapp.sendTestMessage(normalizePhone(body.phoneNumber), body.message); res.json({ success: true, message: "Test WhatsApp message sent successfully" }); } catch (error) { next(error); } }
+export async function deleteWhatsapp(_req: Request, res: Response, next: NextFunction) { try { await whatsapp.deleteConfiguration(); res.json({ success: true, message: "WhatsApp configuration deleted" }); } catch (error) { next(error); } }

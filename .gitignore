@@ -1,0 +1,24 @@
+# Backup files
+*.zip
+*.rar
+*.7z
+
+# Dependencies
+node_modules/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Build files
+dist/
+build/
+
+# Logs
+*.log
+
+# Prisma
+node_modules/.prisma/
+# Backup ZIP files
+*.zip

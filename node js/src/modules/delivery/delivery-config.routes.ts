@@ -1,0 +1,21 @@
+import { Router } from "express";
+import { authenticate, authorizeRoles } from "../../common/middleware/auth.middleware";
+import { requirePermissionOrRoles } from "../../common/middleware/permission.middleware";
+import * as controller from "./delivery-config.controller";
+
+const router = Router();
+router.use(authenticate, authorizeRoles("ADMIN", "SUPER_ADMIN"));
+const allow = (permission: string) => requirePermissionOrRoles(permission, "ADMIN", "SUPER_ADMIN");
+router.get("/smtp", allow("settings.smtp.view"), controller.getSmtp);
+router.post("/smtp", allow("settings.smtp.create"), controller.saveSmtp);
+router.put("/smtp", allow("settings.smtp.update"), controller.saveSmtp);
+router.post("/smtp/test", allow("settings.smtp.test"), controller.testSmtp);
+router.post("/smtp/test-email", allow("settings.smtp.test"), controller.testSmtpEmail);
+router.delete("/smtp", allow("settings.smtp.delete"), controller.deleteSmtp);
+router.get("/whatsapp", allow("settings.whatsapp.view"), controller.getWhatsapp);
+router.post("/whatsapp", allow("settings.whatsapp.create"), controller.saveWhatsapp);
+router.put("/whatsapp", allow("settings.whatsapp.update"), controller.saveWhatsapp);
+router.post("/whatsapp/test", allow("settings.whatsapp.test"), controller.testWhatsapp);
+router.post("/whatsapp/test-message", allow("settings.whatsapp.test"), controller.testWhatsappMessage);
+router.delete("/whatsapp", allow("settings.whatsapp.delete"), controller.deleteWhatsapp);
+export default router;
