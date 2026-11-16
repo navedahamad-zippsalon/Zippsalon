@@ -33,7 +33,7 @@
     "backfill:vendor-onboarding": "ts-node scripts/backfill-vendor-onboarding.ts",
     "seed:staff": "ts-node scripts/seed-staff-demo.ts",
     "seed:staff:reset": "ts-node scripts/reset-staff-demo.ts",
-    "start": "node dist/index.js"
+    "start": "node dist/server.js"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"
