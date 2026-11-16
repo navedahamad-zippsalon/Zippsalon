@@ -2,11 +2,13 @@ import { Response, NextFunction } from "express";
 import { AuthRequest } from "../../common/middleware/auth.middleware";
 import * as serviceService from "./service.service";
 import { 
-    createServiceSchema, 
+    createCategorySchema,
+    updateCategorySchema,
+    createServiceSchema,
     updateServiceSchema, 
     createComboSchema, 
-    createCategorySchema,
-} from "./service.validation";
+    updateComboSchema,
+} from "../../validators/services";
 import { serviceLookupQuerySchema, serviceLookupTypeSchema } from "../../validators/services";
 
 // --- Categories ---
@@ -24,7 +26,7 @@ export const createCategory = async (req: AuthRequest, res: Response, next: Next
 export const updateCategory = async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
         const { id } = req.params;
-        const data = createCategorySchema.partial().parse(req.body);
+        const data = updateCategorySchema.parse(req.body);
         const category = await serviceService.updateCategoryService(id as string, data);
         res.status(200).json({ success: true, data: category });
     } catch (err) {
@@ -142,7 +144,7 @@ export const getCombos = async (req: AuthRequest, res: Response, next: NextFunct
 export const updateCombo = async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
         const { id } = req.params;
-        const data = createComboSchema.partial().parse(req.body);
+        const data = updateComboSchema.parse(req.body);
         const combo = await serviceService.updateComboService(id as string, req.user!.userId, req.user!.roles, data, req.file);
         res.status(200).json({ success: true, message: "Combo updated successfully", data: combo });
     } catch (err) {
