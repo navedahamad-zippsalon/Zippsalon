@@ -15,10 +15,10 @@ const trackingCleanup = setInterval(() => {
 }, 5 * 60 * 1000);
 trackingCleanup.unref();
 
-const server = app.listen(PORT, () => {
-    logger.info(`Server running on http://localhost:${PORT}`);
+const server = app.listen(PORT, "0.0.0.0", () => {
+    logger.info(`Server listening on 0.0.0.0:${PORT}`);
     logger.info(`Docs available at http://localhost:${PORT}/api-docs`);
-    console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`Server listening on 0.0.0.0:${PORT}`);
     console.log(`Docs available at http://localhost:${PORT}/api-docs`);
 });
 
