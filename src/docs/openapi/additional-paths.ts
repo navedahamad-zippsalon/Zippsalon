@@ -114,7 +114,42 @@ const definitions: PathDefinition[] = [
 ];
 
 export const additionalOpenapiPaths: Record<string, Record<string, unknown>> = {};
-
+additionalOpenapiPaths["/api/v1/customer/auth/setup-password"] = {
+  post: {
+    summary: "Configure an initial customer password",
+    description: "Requires an authenticated customer account without a configured password. This endpoint cannot replace an existing password; use the existing password-management endpoints for password changes and recovery.",
+    tags: ["Customer Authentication"],
+    security: [{ bearerAuth: [] }],
+    requestBody: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: {
+            type: "object",
+            required: ["password", "confirmPassword"],
+            properties: {
+              password: {
+                type: "string",
+                minLength: 8,
+                maxLength: 128,
+                format: "password",
+                description: "Must include lowercase, uppercase, numeric, and symbol characters.",
+              },
+              confirmPassword: { type: "string", format: "password" },
+            },
+          },
+        },
+      },
+    },
+    responses: {
+      "200": { description: "Initial password configured; profile completion status returned." },
+      "400": { description: "Password does not meet strength requirements or confirmation does not match." },
+      "401": { description: "Authentication required." },
+      "403": { description: "A customer account is required." },
+      "409": { description: "The account already has a configured password." },
+    },
+  },
+};
 additionalOpenapiPaths["/api/v1/languages"] = {
   get: {
     summary: "List supported application languages",
@@ -650,3 +685,121 @@ additionalOpenapiPaths["/api/v1/booking/commission/settings"].put = {
   },
   responses: { "200": { description: "Commission settings updated; existing booking finance snapshots are retained" }, "400": { description: "Validation error" }, "401": { description: "Unauthorized" }, "403": { description: "Permission denied" } },
 };
+
+additionalOpenapiPaths["/api/v1/customer/me"].put = {
+  summary: "Update the authenticated customer's profile",
+  tags: ["Customer"],
+  security: [{ bearerAuth: [] }],
+  requestBody: {
+    required: true,
+    content: {
+      "application/json": {
+        schema: {
+          type: "object",
+          properties: {
+            firstName: { type: "string", minLength: 2, maxLength: 50 },
+            lastName: { type: "string", minLength: 2, maxLength: 50 },
+            dob: { type: "string", format: "date", description: "YYYY-MM-DD; today or earlier." },
+            gender: { type: "string", enum: ["MALE", "FEMALE", "OTHER", "PREFER_NOT_TO_SAY"] },
+          },
+        },
+      },
+    },
+  },
+  responses: { "200": { description: "Updated profile and backend-calculated completion status." }, "400": { description: "Invalid profile fields." }, "401": { description: "Unauthorized." } },
+};
+additionalOpenapiPaths["/api/v1/customer/me"].get = {
+  summary: "Get the authenticated customer's profile and onboarding status",
+  tags: ["Customer"],
+  security: [{ bearerAuth: [] }],
+  responses: { "200": { description: "Customer profile, primary address, passwordConfigured, profileCompleted, and missingFields. No password hash is returned." }, "401": { description: "Unauthorized." } },
+};
+additionalOpenapiPaths["/api/v1/customer/addresses"].get = {
+  summary: "List the authenticated customer's addresses",
+  tags: ["Customer"],
+  security: [{ bearerAuth: [] }],
+  responses: { "200": { description: "Customer-owned addresses; the default address is first." } },
+};
+additionalOpenapiPaths["/api/v1/customer/addresses"].post = {
+  summary: "Create a customer address",
+  description: "Use isDefault=true to save the primary onboarding address. Retrying an identical default-address request returns the existing address.",
+  tags: ["Customer"],
+  security: [{ bearerAuth: [] }],
+  requestBody: {
+    required: true,
+    content: {
+      "application/json": {
+        schema: {
+          type: "object",
+          required: ["addressLine1", "city", "state", "postalCode"],
+          properties: {
+            label: { type: "string", default: "Home" },
+            addressLine1: { type: "string", maxLength: 255 },
+            addressLine2: { type: "string", maxLength: 255 },
+            city: { type: "string", maxLength: 120 },
+            state: { type: "string", maxLength: 120 },
+            postalCode: { type: "string", description: "Six digits when country is India." },
+            country: { type: "string", default: "India" },
+            isDefault: { type: "boolean", default: false },
+          },
+        },
+      },
+    },
+  },
+  responses: { "201": { description: "Address created or matching default address returned." }, "400": { description: "Invalid address or Indian PIN code." } },
+};
+
+for (const channel of ["email", "whatsapp"] as const) {
+  const identifierDescription = channel === "email" ? "Customer email address" : "Customer phone number";
+  additionalOpenapiPaths[`/api/v1/customer/auth/otp/${channel}/request`] = {
+    post: {
+      summary: `Request a customer ${channel} OTP`,
+      tags: ["Customer Authentication"],
+      security: [],
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["identifier"],
+              properties: { identifier: { type: "string", description: identifierDescription } },
+            },
+          },
+        },
+      },
+      responses: {
+        "200": { description: "OTP requested; includes challengeId and expiresInSeconds." },
+        "404": { description: "No customer account is registered for this identifier." },
+        "429": { description: "OTP request rate limit reached." },
+      },
+    },
+  };
+  additionalOpenapiPaths[`/api/v1/customer/auth/otp/${channel}/verify`] = {
+    post: {
+      summary: `Verify a customer ${channel} OTP`,
+      tags: ["Customer Authentication"],
+      security: [],
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["identifier", "code"],
+              properties: {
+                identifier: { type: "string", description: identifierDescription },
+                code: { type: "string", minLength: 6, maxLength: 6, pattern: "^\\d{6}$" },
+                challengeId: { type: "string", format: "uuid" },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        "200": { description: "JWT session and customer object with profileCompleted, passwordConfigured, and missingFields for post-login routing." },
+        "400": { description: "Invalid, expired, or exhausted OTP challenge." },
+      },
+    },
+  };
+}

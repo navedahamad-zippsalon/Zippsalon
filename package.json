@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
-    "test": "set NODE_ENV=test&& npm run build && node --test --test-concurrency=1 tests/whatsapp.test.js tests/api.test.js tests/feed-admin.test.js tests/attendance-filters.test.js tests/service-permissions.test.js tests/reports-menu.test.js tests/subscription-entitlements.test.js tests/staff-pagination.test.js tests/user-management-validation.test.js tests/dashboard-revenue.test.js tests/inventory-query.test.js tests/booking-finance.test.js tests/rbac-payment-wallet-menus.test.js tests/payment-wallet-admin.test.js tests/i18n.test.js tests/expenses-validation.test.js",
+    "test": "set NODE_ENV=test&& npm run build && node --test --test-concurrency=1 tests/whatsapp.test.js tests/api.test.js tests/feed-admin.test.js tests/attendance-filters.test.js tests/service-permissions.test.js tests/reports-menu.test.js tests/subscription-entitlements.test.js tests/staff-pagination.test.js tests/user-management-validation.test.js tests/dashboard-revenue.test.js tests/inventory-query.test.js tests/booking-finance.test.js tests/rbac-payment-wallet-menus.test.js tests/payment-wallet-admin.test.js tests/i18n.test.js tests/expenses-validation.test.js tests/customer-profile.test.js",
     "docs:check": "ts-node scripts/docs-check.ts",
     "postinstall":"prisma generate",
     "db:migrate": "prisma migrate deploy",

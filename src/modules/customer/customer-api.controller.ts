@@ -4,9 +4,40 @@ import { prisma } from "../../infrastructure/database/prisma";
 import { getUserPermissions, getMenus } from "../rbac/rbac.service";
 import { bookingService } from "../booking/booking.service";
 import * as commerce from "./customer-commerce.service";
+import { getCustomerProfileStatus } from "./customer-profile.service";
+import { z } from "zod";
 
 const userId = (req: Request) => (req as any).user.userId as string;
 const send = (res: Response, data: unknown) => res.json({ success: true, data });
+const customerGenderSchema = z.enum(["MALE", "FEMALE", "OTHER", "PREFER_NOT_TO_SAY"]);
+const dateOfBirthSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?Z)?$/, "Date of birth must use YYYY-MM-DD or an ISO UTC date")
+  .refine((value) => {
+    const dateOnly = value.slice(0, 10);
+    const date = new Date(`${dateOnly}T00:00:00.000Z`);
+    return !Number.isNaN(date.getTime())
+      && date.toISOString().slice(0, 10) === dateOnly
+      && date <= new Date(new Date().toISOString().slice(0, 10));
+  }, "Date of birth must be a valid date and cannot be in the future");
+const profileUpdateSchema = z.object({
+  firstName: z.string().trim().min(2).max(50).optional(),
+  lastName: z.string().trim().min(2).max(50).nullable().optional(),
+  gender: customerGenderSchema.nullable().optional(),
+  dob: dateOfBirthSchema.nullable().optional(),
+});
+const customerAddressSchema = z.object({
+  label: z.string().trim().min(1).max(50).default("Home"),
+  addressLine1: z.string().trim().min(1).max(255),
+  addressLine2: z.string().trim().max(255).nullable().optional(),
+  city: z.string().trim().min(1).max(120),
+  state: z.string().trim().min(1).max(120),
+  country: z.string().trim().min(1).max(120).default("India"),
+  postalCode: z.string().trim().min(1).max(32),
+  isDefault: z.boolean().default(false),
+}).strict().superRefine((address, context) => {
+  if (address.country.toLowerCase() === "india" && !/^\d{6}$/.test(address.postalCode)) {
+    context.addIssue({ code: "custom", path: ["postalCode"], message: "Enter a valid 6-digit Indian PIN code." });
+  }
+});
 const allowedSalons = async (id: string) => prisma.salonCustomer.findMany({ where: { userId: id, salon: { isActive: true } }, select: { salonId: true, salon: { select: { id: true, name: true, parentId: true, ownerId: true, address: true } } } });
 const requestedSalon = async (id: string, salonId?: string) => {
   const mappings = await allowedSalons(id);
@@ -114,8 +145,43 @@ export async function availability(req: Request, res: Response, next: NextFuncti
   } catch (error) { next(error); }
 }
 
-export async function me(req: Request, res: Response, next: NextFunction) { try { const user = await prisma.user.findUnique({ where: { id: userId(req) }, select: { id: true, firstName: true, lastName: true, email: true, phone: true, countryCode: true, gender: true, dob: true } }); if (!user) return res.status(404).json({ success: false, message: "Customer not found" }); return send(res, { ...user, accountType: "CUSTOMER" }); } catch (e) { next(e); } }
-export async function updateMe(req: Request, res: Response, next: NextFunction) { try { const user = await prisma.user.update({ where: { id: userId(req) }, data: { firstName: req.body.firstName, lastName: req.body.lastName, gender: req.body.gender, dob: req.body.dob ? new Date(req.body.dob) : undefined }, select: { id: true, firstName: true, lastName: true, email: true, phone: true, countryCode: true, gender: true, dob: true } }); return send(res, { ...user, accountType: "CUSTOMER" }); } catch (e) { next(e); } }
+export async function me(req: Request, res: Response, next: NextFunction) {
+  try {
+    const [user, profileStatus] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: userId(req) },
+        select: {
+          id: true, firstName: true, lastName: true, email: true, phone: true, countryCode: true,
+          gender: true, dob: true, passwordConfigured: true,
+          customerAddresses: {
+            where: { isDefault: true },
+            orderBy: { updatedAt: "desc" },
+            take: 1,
+          },
+        },
+      }),
+      getCustomerProfileStatus(userId(req)),
+    ]);
+    if (!user) return res.status(404).json({ success: false, message: "Customer not found" });
+    const { customerAddresses, ...profile } = user;
+    return send(res, { ...profile, primaryAddress: customerAddresses[0] ?? null, ...profileStatus, accountType: "CUSTOMER" });
+  } catch (e) { next(e); }
+}
+export async function updateMe(req: Request, res: Response, next: NextFunction) {
+  try {
+    const input = profileUpdateSchema.parse(req.body);
+    const user = await prisma.user.update({
+      where: { id: userId(req) },
+      data: {
+        ...input,
+        dob: input.dob === undefined ? undefined : input.dob === null ? null : new Date(`${input.dob.slice(0, 10)}T00:00:00.000Z`),
+      },
+      select: { id: true, firstName: true, lastName: true, email: true, phone: true, countryCode: true, gender: true, dob: true },
+    });
+    const profileStatus = await getCustomerProfileStatus(userId(req));
+    return send(res, { ...user, ...profileStatus, accountType: "CUSTOMER" });
+  } catch (e) { next(e); }
+}
 export async function permissions(req: Request, res: Response, next: NextFunction) { try { return send(res, await getUserPermissions(userId(req))); } catch (e) { next(e); } }
 export async function menu(req: Request, res: Response, next: NextFunction) { try { const p = await getUserPermissions(userId(req)); return send(res, await getMenus(["CUSTOMER"], p, false, true)); } catch (e) { next(e); } }
 export async function salons(req: Request, res: Response, next: NextFunction) { try { return send(res, (await allowedSalons(userId(req))).map((item) => item.salon)); } catch (e) { next(e); } }
@@ -163,7 +229,7 @@ export async function applyCustomerReferral(req: Request, res: Response, next: N
 export async function customerAdvertisements(req: Request, res: Response, next: NextFunction) { try { return send(res, await commerce.advertisements("CUSTOMER", userId(req))); } catch (e) { next(e); } }
 export async function audienceAdvertisements(req: Request, res: Response, next: NextFunction) { try { const currentUser = (req as any).user; const audience = currentUser?.roles?.includes("VENDOR") ? "VENDOR" : "CUSTOMER"; return send(res, await commerce.advertisements(audience, currentUser?.userId)); } catch (e) { next(e); } }
 export async function customerAddresses(req: Request, res: Response, next: NextFunction) { try { return send(res, await commerce.listAddresses(userId(req))); } catch (e) { next(e); } }
-export async function createCustomerAddress(req: Request, res: Response, next: NextFunction) { try { return res.status(201).json({ success: true, data: await commerce.createAddress(userId(req), req.body) }); } catch (e) { next(e); } }
-export async function updateCustomerAddress(req: Request, res: Response, next: NextFunction) { try { return send(res, await commerce.updateAddress(userId(req), String(req.params.id), req.body)); } catch (e) { next(e); } }
+export async function createCustomerAddress(req: Request, res: Response, next: NextFunction) { try { const input = customerAddressSchema.parse(req.body); return res.status(201).json({ success: true, data: await commerce.createAddress(userId(req), input) }); } catch (e) { next(e); } }
+export async function updateCustomerAddress(req: Request, res: Response, next: NextFunction) { try { const input = customerAddressSchema.partial().parse(req.body); return send(res, await commerce.updateAddress(userId(req), String(req.params.id), input)); } catch (e) { next(e); } }
 export async function deleteCustomerAddress(req: Request, res: Response, next: NextFunction) { try { return send(res, await commerce.deleteAddress(userId(req), String(req.params.id))); } catch (e) { next(e); } }
 export async function defaultCustomerAddress(req: Request, res: Response, next: NextFunction) { try { return send(res, await commerce.setDefaultAddress(userId(req), String(req.params.id))); } catch (e) { next(e); } }

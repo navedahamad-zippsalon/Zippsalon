@@ -25,6 +25,7 @@ const options = {
         ],
         tags: [
             { name: "Auth", description: "Authentication, user login, registration, password management, and JWT tokens" },
+            { name: "Customer Authentication", description: "Customer OTP authentication and initial password setup" },
             { name: "Users", description: "User profiles, accounts, avatar upload, and salon profile completion" },
             { name: "Feed", description: "Salon social feed, posts, comments, likes, shares, views, and 24-hour stories" },
             { name: "Salons", description: "Salons management, branch outlets, addresses, operating hours, and contacts" },

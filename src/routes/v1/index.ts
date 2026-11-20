@@ -28,6 +28,7 @@ import { subscriptionRoutes, subscriptionAdminRoutes, subscriptionPlanEntitlemen
 import paymentGatewayRoutes, { vendorRazorpayRouter } from "../../modules/payment-gateway/razorpay.routes";
 import customerAuthRoutes from "../../modules/customer-auth/customer-auth.routes";
 import customerApiRoutes from "../../modules/customer/customer-api.routes";
+import { requireCompletedCustomerProfile } from "../../modules/customer/customer-profile.middleware";
 import { audienceAdvertisements } from "../../modules/customer/customer-api.controller";
 import deliveryConfigRoutes from "../../modules/delivery/delivery-config.routes";
 import communicationConfigRoutes from "../../modules/config/communication-config.routes";
@@ -55,7 +56,7 @@ router.get("/languages/coverage", getLanguageCoverage);
 router.get("/me/language", authenticate, getMyLanguage);
 router.put("/me/language", authenticate, validate({ body: languagePreferenceSchema }), updateMyLanguage);
 
-router.get("/advertisements", authenticate, authorizeRoles("CUSTOMER", "VENDOR"), audienceAdvertisements);
+router.get("/advertisements", authenticate, authorizeRoles("CUSTOMER", "VENDOR"), requireCompletedCustomerProfile, audienceAdvertisements);
 
 router.get("/me", authenticate, async (req, res) => {
     try {

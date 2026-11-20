@@ -2,9 +2,10 @@ import { Router } from "express";
 import { authenticate, authorizeRoles } from "../../common/middleware/auth.middleware";
 import { requirePermission } from "../../common/middleware/permission.middleware";
 import * as c from "./customer-api.controller";
+import { requireCompletedProfileExceptOnboarding } from "./customer-profile.middleware";
 
 const router = Router();
-router.use(authenticate, authorizeRoles("CUSTOMER"));
+router.use(authenticate, authorizeRoles("CUSTOMER"), requireCompletedProfileExceptOnboarding);
 /** @swagger
  * /api/v1/customer/home:
  *   get:
@@ -76,7 +77,21 @@ router.post("/addresses", c.createCustomerAddress);
 router.put("/addresses/:id", c.updateCustomerAddress);
 router.delete("/addresses/:id", c.deleteCustomerAddress);
 router.patch("/addresses/:id/default", c.defaultCustomerAddress);
-/** @swagger /api/v1/customer/me: { get: { summary: Get customer profile, tags: [Customer], security: [{ bearerAuth: [] }], responses: { 200: { description: Customer profile }, 401: { description: Unauthorized }, 403: { description: Forbidden } } } } */
+/**
+ * @swagger
+ * /api/v1/customer/me:
+ *   get:
+ *     summary: Get customer profile and onboarding status
+ *     tags: [Customer]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200:
+ *         description: >-
+ *           Customer profile, primaryAddress, passwordConfigured, profileCompleted,
+ *           missingFields, and profileCompletedAt. No password hash is returned.
+ *       401: { description: Unauthorized }
+ *       403: { description: Forbidden }
+ */
 router.get("/me", requirePermission("customer.profile.view"), c.me);
 router.put("/me", requirePermission("customer.profile.update"), c.updateMe);
 router.get("/me/permissions", c.permissions);

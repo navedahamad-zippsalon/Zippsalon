@@ -8,6 +8,7 @@ import { sendMail } from "../delivery/smtp.service";
 import { sendOtp as sendWhatsAppOtp } from "../delivery/whatsapp-config.service";
 import { ConfigurationScope } from "../delivery/smtp.service";
 import { createTranslator, languageFromDatabase, SupportedLanguage } from "../i18n/i18n.translations";
+import { getCustomerProfileStatus } from "../customer/customer-profile.service";
 
 const JWT_SECRET = process.env.JWT_SECRET as string;
 const OTP_TTL_MS = 5 * 60 * 1000;
@@ -97,7 +98,7 @@ export async function register(input: { firstName: string; lastName?: string; em
   const role = await ensureCustomerRole();
   const password = await bcrypt.hash(crypto.randomBytes(32).toString("hex"), 10);
   const user = await prisma.$transaction(async (tx) => {
-    const created = await tx.user.create({ data: { firstName: input.firstName, lastName: input.lastName, email, phone, countryCode: input.countryCode, password, source: "CUSTOMER", isActive: false } });
+    const created = await tx.user.create({ data: { firstName: input.firstName, lastName: input.lastName, email, phone, countryCode: input.countryCode, password, passwordConfigured: false, source: "CUSTOMER", isActive: false } });
     await tx.userRole.create({ data: { userId: created.id, roleId: role.id } });
     await tx.salonCustomer.create({ data: { userId: created.id, salonId: salon.id } });
     return created;
@@ -164,8 +165,31 @@ export async function verifyOtp(channel: "EMAIL" | "WHATSAPP", identifier: strin
   const permissions = await getUserPermissions(user.id);
   const trackingSessionId = crypto.randomUUID();
   const token = jwt.sign({ userId: user.id, roles: ["CUSTOMER"], trackingSessionId }, JWT_SECRET, { expiresIn: "7d" });
-  const customer = { id: user.id, accountType: "CUSTOMER", firstName: user.firstName, lastName: user.lastName, email: user.email, phone: user.phone, countryCode: user.countryCode };
+  const profileStatus = await getCustomerProfileStatus(user.id);
+  const customer = { id: user.id, accountType: "CUSTOMER", firstName: user.firstName, lastName: user.lastName, email: user.email, phone: user.phone, countryCode: user.countryCode, ...profileStatus };
   return { accessToken: token, token, user: customer, customer, permissions, trackingSessionId };
+}
+
+export async function setupInitialPassword(userId: string, password: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, passwordConfigured: true },
+  });
+  if (!user) throw { status: 404, code: "CUSTOMER_NOT_FOUND", message: "Customer not found." };
+  if (user.passwordConfigured) {
+    throw { status: 409, code: "PASSWORD_ALREADY_CONFIGURED", message: "A password is already configured for this account." };
+  }
+
+  const passwordHash = await bcrypt.hash(password, 12);
+  const result = await prisma.user.updateMany({
+    where: { id: userId, passwordConfigured: false },
+    data: { password: passwordHash, passwordConfigured: true },
+  });
+  if (result.count !== 1) {
+    throw { status: 409, code: "PASSWORD_ALREADY_CONFIGURED", message: "A password is already configured for this account." };
+  }
+
+  return getCustomerProfileStatus(userId);
 }
 
 export const customerPermissions = [...CUSTOMER_PERMISSIONS];

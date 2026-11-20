@@ -11,6 +11,7 @@ enum Gender {
   MALE
   FEMALE
   OTHER
+  PREFER_NOT_TO_SAY
 }
 
 enum UserSource {
@@ -534,6 +535,8 @@ model User {
   phone             String
   countryCode       String
   password          String
+  passwordConfigured Boolean @default(true)
+  profileCompletedAt DateTime?
   isActive          Boolean      @default(true)
   gender            Gender?
   dob               DateTime?

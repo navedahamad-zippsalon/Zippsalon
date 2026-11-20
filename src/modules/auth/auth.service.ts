@@ -263,7 +263,7 @@ export const resetPassword = async (token: string, passwordString: string) => {
     await prisma.$transaction([
         prisma.user.update({
             where: { id: resetToken.userId },
-            data: { password: hashedPassword },
+            data: { password: hashedPassword, passwordConfigured: true },
         }),
         prisma.passwordResetToken.deleteMany({
             where: { userId: resetToken.userId },
@@ -293,7 +293,7 @@ export const changePasswordService = async (userId: string, currentPasswordStrin
     const hashedPassword = await bcrypt.hash(newPasswordString, 10);
     await prisma.user.update({
         where: { id: userId },
-        data: { password: hashedPassword }
+        data: { password: hashedPassword, passwordConfigured: true }
     });
 
     return { success: true, message: "Password updated successfully", messageKey: "auth.password_updated" };

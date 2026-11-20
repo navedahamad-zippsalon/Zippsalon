@@ -4,10 +4,25 @@ import * as service from "./customer-auth.service";
 import { createLoginSession } from "../tracking/tracking.service";
 import logger from "../../infrastructure/logger/logger";
 import { SupportedLanguage } from "../i18n/i18n.translations";
+import { authenticate, authorizeRoles } from "../../common/middleware/auth.middleware";
+import { isPureCustomerUser } from "../../common/utils/role.util";
 
 const registrationSchema = z.object({ firstName: z.string().trim().min(2), lastName: z.string().trim().optional(), email: z.string().email(), phone: z.string().min(5), countryCode: z.string().min(1), vendorId: z.string().uuid(), branchId: z.string().uuid().optional() });
 const otpRequestSchema = z.object({ identifier: z.string().trim().min(3) });
 const otpVerifySchema = z.object({ identifier: z.string().trim().min(3), code: z.string().regex(/^\d{6}$/), challengeId: z.string().uuid().optional() });
+const strongPasswordSchema = z.string().min(8).max(128)
+  .regex(/[a-z]/, "Password must include a lowercase letter")
+  .regex(/[A-Z]/, "Password must include an uppercase letter")
+  .regex(/[0-9]/, "Password must include a number")
+  .regex(/[^A-Za-z0-9]/, "Password must include a symbol");
+const initialPasswordSchema = z.object({
+  password: strongPasswordSchema,
+  confirmPassword: strongPasswordSchema,
+}).strict().superRefine((value, context) => {
+  if (value.password !== value.confirmPassword) {
+    context.addIssue({ code: "custom", path: ["confirmPassword"], message: "Passwords do not match." });
+  }
+});
 
 const handle = (fn: (req: Request) => Promise<unknown>) => (req: Request, res: Response, next: NextFunction) => Promise.resolve(fn(req)).then((data) => res.json({ success: true, data })).catch(next);
 const requestLanguages = (req: Request) => ({
@@ -73,3 +88,17 @@ const publicVerified = (channel: "EMAIL" | "WHATSAPP", parse: (body: unknown) =>
 };
 export const publicEmailVerifyOtp = publicVerified("EMAIL", publicEmailVerify.parse);
 export const publicWhatsappVerifyOtp = publicVerified("WHATSAPP", publicPhoneVerify.parse);
+
+export const setupInitialPassword = [
+  authenticate,
+  authorizeRoles("CUSTOMER"),
+  (req: Request, res: Response, next: NextFunction) => {
+    if (!isPureCustomerUser(((req as any).user?.roles ?? []) as string[])) {
+      return res.status(403).json({ success: false, code: "CUSTOMER_ONLY", message: "This endpoint is only available to customer accounts." });
+    }
+    return handle((currentReq) => service.setupInitialPassword(
+      (currentReq as any).user.userId,
+      initialPasswordSchema.parse(currentReq.body).password,
+    ))(req, res, next);
+  },
+];

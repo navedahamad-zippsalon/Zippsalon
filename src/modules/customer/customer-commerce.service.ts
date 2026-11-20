@@ -240,10 +240,36 @@ export async function advertisements(audience: "CUSTOMER" | "VENDOR" = "CUSTOMER
 }
 
 export async function listAddresses(customerId: string) { return prisma.customerAddress.findMany({ where: { customerId }, orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }] }); }
-export async function createAddress(customerId: string, input: any) { return prisma.$transaction(async (tx) => { if (input.isDefault) await tx.customerAddress.updateMany({ where: { customerId }, data: { isDefault: false } }); return tx.customerAddress.create({ data: { ...input, customerId } }); }); }
-export async function updateAddress(customerId: string, id: string, input: any) { return prisma.$transaction(async (tx) => { if (input.isDefault) await tx.customerAddress.updateMany({ where: { customerId }, data: { isDefault: false } }); const result = await tx.customerAddress.updateMany({ where: { id, customerId }, data: input }); if (!result.count) throw { status: 404, message: "Address not found" }; return tx.customerAddress.findUnique({ where: { id } }); }); }
+export async function createAddress(customerId: string, input: any) {
+  return prisma.$transaction(async (tx) => {
+    if (input.isDefault) {
+      const currentDefault = await tx.customerAddress.findFirst({ where: { customerId, isDefault: true } });
+      if (currentDefault
+        && currentDefault.label === input.label
+        && currentDefault.addressLine1 === input.addressLine1
+        && currentDefault.addressLine2 === (input.addressLine2 ?? null)
+        && currentDefault.city === input.city
+        && currentDefault.state === input.state
+        && currentDefault.country === input.country
+        && currentDefault.postalCode === input.postalCode) {
+        return currentDefault;
+      }
+      await tx.customerAddress.updateMany({ where: { customerId }, data: { isDefault: false } });
+    }
+    return tx.customerAddress.create({ data: { ...input, customerId } });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+}
+export async function updateAddress(customerId: string, id: string, input: any) {
+  return prisma.$transaction(async (tx) => {
+    const ownedAddress = await tx.customerAddress.findFirst({ where: { id, customerId }, select: { id: true } });
+    if (!ownedAddress) throw { status: 404, message: "Address not found" };
+    if (input.isDefault) await tx.customerAddress.updateMany({ where: { customerId }, data: { isDefault: false } });
+    await tx.customerAddress.update({ where: { id }, data: input });
+    return tx.customerAddress.findUnique({ where: { id } });
+  });
+}
 export async function deleteAddress(customerId: string, id: string) { const result = await prisma.customerAddress.deleteMany({ where: { id, customerId } }); if (!result.count) throw { status: 404, message: "Address not found" }; return { deleted: true }; }
-export async function setDefaultAddress(customerId: string, id: string) { return prisma.$transaction(async (tx) => { await tx.customerAddress.updateMany({ where: { customerId }, data: { isDefault: false } }); const result = await tx.customerAddress.updateMany({ where: { id, customerId }, data: { isDefault: true } }); if (!result.count) throw { status: 404, message: "Address not found" }; return tx.customerAddress.findUnique({ where: { id } }); }); }
+export async function setDefaultAddress(customerId: string, id: string) { return prisma.$transaction(async (tx) => { const ownedAddress = await tx.customerAddress.findFirst({ where: { id, customerId }, select: { id: true } }); if (!ownedAddress) throw { status: 404, message: "Address not found" }; await tx.customerAddress.updateMany({ where: { customerId }, data: { isDefault: false } }); await tx.customerAddress.update({ where: { id }, data: { isDefault: true } }); return tx.customerAddress.findUnique({ where: { id } }); }); }
 
 export async function creditWallet(customerId: string, amount: number, type: WalletTransactionType, description: string, referenceId?: string) { if (!(amount > 0)) throw { status: 400, message: "Amount must be positive" }; return prisma.$transaction(async (tx) => { const wallet = await tx.customerWallet.upsert({ where: { customerId }, update: { balance: { increment: amount } }, create: { customerId, balance: amount } }); return tx.walletTransaction.create({ data: { walletId: wallet.id, customerId, amount, type, description, referenceId, status: WalletTransactionStatus.COMPLETED } }); }); }
 
